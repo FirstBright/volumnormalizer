@@ -1,0 +1,39 @@
+// 현재 탭에서 오디오 태그 탐색 및 Web Audio API로 조정
+const normalizeAudio = (volume) => {
+  const audioElements = document.querySelectorAll("audio, video");
+
+  audioElements.forEach((audioElement) => {
+    const audioContext = new (window.AudioContext ||
+      window.webkitAudioContext)();
+    const gainNode = audioContext.createGain();
+    const source = audioContext.createMediaElementSource(audioElement);
+    source.connect(gainNode).connect(audioContext.destination);
+
+    const analyserNode = audioContext.createAnalyser();
+    source.connect(analyserNode);
+
+    const dataArray = new Uint8Array(analyserNode.fftSize);
+
+    function adjustVolume() {
+      analyserNode.getByteTimeDomainData(dataArray);
+
+      // RMS 계산 (Root Mean Square)
+      const rms = Math.sqrt(
+        dataArray.reduce((sum, value) => sum + Math.pow(value - 128, 2), 0) /
+          dataArray.length,
+      );
+
+      // 절대 볼륨 조정
+      gainNode.gain.value = volume / rms;
+      requestAnimationFrame(adjustVolume);
+    }
+
+    adjustVolume();
+  });
+};
+
+// 스토리지에서 볼륨 값 가져오기
+chrome.storage.local.get(["volume", "isActive"], (data) => {
+  if (data.isActive === false) return;
+  normalizeAudio(data.volume || 0.5);
+});
